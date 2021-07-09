@@ -81,6 +81,7 @@ public class FlutterBoostPlugin implements FlutterPlugin, NativeRouterApi, Activ
             FlutterBoostRouteOptions options = new FlutterBoostRouteOptions.Builder()
                     .pageName(params.getPageName())
                     .uniqueId(params.getUniqueId())
+                    .opaque(params.getOpaque())
                     .arguments((Map<String, Object>) (Object) params.getArguments())
                     .build();
             delegate.pushFlutterRoute(options);
@@ -242,7 +243,7 @@ public class FlutterBoostPlugin implements FlutterPlugin, NativeRouterApi, Activ
         } else {
             throw new RuntimeException("FlutterBoostPlugin might *NOT* have attached to engine yet!");
         }
-        Log.v(TAG, "## onContainerShow: " + channel);
+        Log.v(TAG, "## onContainerShow: " + uniqueId);
     }
 
     public void onContainerHide(String uniqueId) {
@@ -255,7 +256,7 @@ public class FlutterBoostPlugin implements FlutterPlugin, NativeRouterApi, Activ
         } else {
             throw new RuntimeException("FlutterBoostPlugin might *NOT* have attached to engine yet!");
         }
-        Log.v(TAG, "## onContainerHide: " + channel);
+        Log.v(TAG, "## onContainerHide: " + uniqueId);
     }
 
     public void onContainerCreated(FlutterViewContainer container) {

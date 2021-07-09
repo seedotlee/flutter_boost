@@ -15,11 +15,13 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import io.flutter.Log;
 import io.flutter.embedding.android.FlutterFragment;
 import io.flutter.embedding.android.FlutterView;
 import io.flutter.embedding.android.RenderMode;
 import io.flutter.embedding.android.TransparencyMode;
 import io.flutter.embedding.engine.FlutterEngine;
+import io.flutter.plugin.platform.PlatformPlugin;
 
 import static com.idlefish.flutterboost.containers.FlutterActivityLaunchConfigs.ACTIVITY_RESULT_KEY;
 import static com.idlefish.flutterboost.containers.FlutterActivityLaunchConfigs.EXTRA_UNIQUE_ID;
@@ -27,14 +29,17 @@ import static com.idlefish.flutterboost.containers.FlutterActivityLaunchConfigs.
 import static com.idlefish.flutterboost.containers.FlutterActivityLaunchConfigs.EXTRA_URL_PARAM;
 
 public class FlutterBoostFragment extends FlutterFragment implements FlutterViewContainer {
+    private static final String TAG = "FlutterBoostFragment";
+    private static final boolean DEBUG = false;
     private final String who = UUID.randomUUID().toString();
     private FlutterView flutterView;
+    private PlatformPlugin platformPlugin;
 
     // @Override
     public void detachFromFlutterEngine() {
         /**
          * Override and do nothing.
-         * 
+         *
          * The idea here is to avoid releasing delegate when
          * a new FlutterFragment is attached in Flutter2.0.
          */
@@ -43,6 +48,7 @@ public class FlutterBoostFragment extends FlutterFragment implements FlutterView
     @Override
     public void onAttach(Context context) {
         super.onAttach(context);
+        if (DEBUG) Log.e(TAG, "#onAttach: " + this);
     }
 
     @Override
@@ -52,6 +58,7 @@ public class FlutterBoostFragment extends FlutterFragment implements FlutterView
         flutterView = FlutterBoostUtils.findFlutterView(view);
         assert(flutterView != null);
         flutterView.detachFromFlutterEngine();
+        if (DEBUG) Log.e(TAG, "#onCreateView: " + this);
         return view;
     }
 
@@ -59,38 +66,34 @@ public class FlutterBoostFragment extends FlutterFragment implements FlutterView
     public void onHiddenChanged(boolean hidden) {
         assert(flutterView != null);
         if (hidden) {
-            FlutterBoost.instance().getPlugin().onContainerDisappeared(this);
-            ActivityAndFragmentPatch.onPauseDetachFromFlutterEngine(flutterView, getFlutterEngine());
+            didFragmentHide();
         } else {
-            FlutterBoost.instance().getPlugin().onContainerAppeared(this);
-            ActivityAndFragmentPatch.onResumeAttachToFlutterEngine(flutterView, getFlutterEngine(), this);
+            didFragmentShow();
         }
         super.onHiddenChanged(hidden);
+        if (DEBUG) Log.e(TAG, "#onHiddenChanged: hidden="  + hidden + ", " + this);
     }
 
     @Override
     public void setUserVisibleHint(boolean isVisibleToUser) {
         assert(flutterView != null);
         if (isVisibleToUser) {
-            FlutterBoost.instance().getPlugin().onContainerAppeared(this);
-            ActivityAndFragmentPatch.onResumeAttachToFlutterEngine(flutterView, getFlutterEngine(), this);
+            didFragmentShow();
         } else {
-            FlutterBoost.instance().getPlugin().onContainerDisappeared(this);
-            ActivityAndFragmentPatch.onPauseDetachFromFlutterEngine(flutterView, getFlutterEngine());
+            didFragmentHide();
         }
         super.setUserVisibleHint(isVisibleToUser);
+        if (DEBUG) Log.e(TAG, "#setUserVisibleHint: isVisibleToUser="  + isVisibleToUser + ", " + this);
     }
 
     @Override
     public void onResume() {
         super.onResume();
         if (!isHidden()) {
-            FlutterBoost.instance().getPlugin().onContainerAppeared(this);
-            assert(flutterView != null);
-            ActivityAndFragmentPatch.onResumeAttachToFlutterEngine(flutterView, getFlutterEngine(), this);
-            assert(getFlutterEngine() != null);
+            didFragmentShow();
             getFlutterEngine().getLifecycleChannel().appIsResumed();
         }
+        if (DEBUG) Log.e(TAG, "#onResume: " + this);
     }
 
     @Override
@@ -101,12 +104,9 @@ public class FlutterBoostFragment extends FlutterFragment implements FlutterView
     @Override
     public void onPause() {
         super.onPause();
-        if (!isHidden()) {
-            assert(flutterView != null);
-            ActivityAndFragmentPatch.onPauseDetachFromFlutterEngine(flutterView, getFlutterEngine());
-            assert(getFlutterEngine() != null);
-            getFlutterEngine().getLifecycleChannel().appIsResumed();
-        }
+        didFragmentHide();
+        getFlutterEngine().getLifecycleChannel().appIsResumed();
+        if (DEBUG) Log.e(TAG, "#onPause: " + this);
     }
 
     @Override
@@ -114,15 +114,14 @@ public class FlutterBoostFragment extends FlutterFragment implements FlutterView
         super.onStop();
         assert(getFlutterEngine() != null);
         getFlutterEngine().getLifecycleChannel().appIsResumed();
-        if (!isHidden()) {
-            FlutterBoost.instance().getPlugin().onContainerDisappeared(this);
-        }
+        if (DEBUG) Log.e(TAG, "#onStop: " + this);
     }
 
     @Override
     public void onDestroyView() {
         super.onDestroyView();
         FlutterBoost.instance().getPlugin().onContainerDestroyed(this);
+        if (DEBUG) Log.e(TAG, "#onDestroyView: " + this);
     }
 
     @Override
@@ -131,11 +130,32 @@ public class FlutterBoostFragment extends FlutterFragment implements FlutterView
         super.onDetach();
         assert(engine != null);
         engine.getLifecycleChannel().appIsResumed();
+        if (DEBUG) Log.e(TAG, "#onDetach: " + this);
     }
 
     @Override
     public void onBackPressed() {
         ActivityAndFragmentPatch.onBackPressed();
+    }
+
+    @Override
+    public boolean shouldRestoreAndSaveState() {
+      if (getArguments().containsKey(ARG_ENABLE_STATE_RESTORATION)) {
+        return getArguments().getBoolean(ARG_ENABLE_STATE_RESTORATION);
+      }
+      // Defaults to |true|.
+      return true;
+    }
+
+    @Override
+    public PlatformPlugin providePlatformPlugin(Activity activity, FlutterEngine flutterEngine) {
+        return null;
+    }
+
+    @Override
+    public boolean shouldDestroyEngineWithHost() {
+        // The |FlutterEngine| should outlive this FlutterFragment.
+        return false;
     }
 
     @Override
@@ -177,6 +197,23 @@ public class FlutterBoostFragment extends FlutterFragment implements FlutterView
       return FlutterBoost.ENGINE_ID;
     }
 
+    private void didFragmentShow() {
+        platformPlugin = new PlatformPlugin(getActivity(), getFlutterEngine().getPlatformChannel());
+        FlutterBoost.instance().getPlugin().onContainerAppeared(this);
+        // Attache plugins to the activity.
+        getFlutterEngine().getActivityControlSurface().attachToActivity(getActivity(), getActivity().getLifecycle());
+        ActivityAndFragmentPatch.onResumeAttachToFlutterEngine(flutterView, getFlutterEngine());
+    }
+
+    private void didFragmentHide() {
+        FlutterBoost.instance().getPlugin().onContainerDisappeared(this);
+        ActivityAndFragmentPatch.onPauseDetachFromFlutterEngine(flutterView, getFlutterEngine());
+        // Plugins are no longer attached to the activity.
+        getFlutterEngine().getActivityControlSurface().detachFromActivity();
+        platformPlugin.destroy();
+        platformPlugin = null;
+    }
+
     public static class CachedEngineFragmentBuilder {
         private final Class<? extends FlutterBoostFragment> fragmentClass;
         private boolean destroyEngineWithFragment = false;
@@ -216,12 +253,10 @@ public class FlutterBoostFragment extends FlutterFragment implements FlutterView
             return this;
         }
 
-
         public CachedEngineFragmentBuilder renderMode( RenderMode renderMode) {
             this.renderMode = renderMode;
             return this;
         }
-
 
         public CachedEngineFragmentBuilder transparencyMode(
                  TransparencyMode transparencyMode) {
